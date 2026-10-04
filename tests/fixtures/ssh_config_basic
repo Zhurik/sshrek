@@ -1,0 +1,14 @@
+Host *
+  ServerAliveInterval 60
+
+Host usa
+  HostName 203.0.113.10
+  User root
+
+Host rpi5
+  HostName 192.168.1.5
+  User pi
+  Port 2222
+
+Host potato
+  HostName 10.0.0.5
