@@ -8,4 +8,5 @@ pub mod history;
 pub mod paths;
 pub mod picker;
 pub mod render;
+pub mod runner;
 pub mod sort;
