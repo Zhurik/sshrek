@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueHint};
 use clap_complete::Shell;
 
 use crate::sort::SortKey;
@@ -12,7 +12,11 @@ use crate::sort::SortKey;
 )]
 pub struct Cli {
     /// Хост из ~/.ssh/config; `-` — последний, к которому подключался
-    #[arg(value_name = "HOST", allow_hyphen_values = true)]
+    #[arg(
+        value_name = "HOST",
+        allow_hyphen_values = true,
+        value_hint = ValueHint::Hostname
+    )]
     pub host: Option<String>,
 
     /// Дополнительные аргументы для ssh после `--`
@@ -75,7 +79,7 @@ pub enum Command {
 
     /// Карточка одного хоста (используется в --preview пикера)
     Preview {
-        #[arg(value_name = "HOST")]
+        #[arg(value_name = "HOST", value_hint = ValueHint::Hostname)]
         host: String,
     },
 

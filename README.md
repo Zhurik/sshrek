@@ -43,6 +43,14 @@ cargo install --path .
 sshrek completions zsh > ~/.zfunc/_sshrek
 ```
 
+Из коробки zsh дополняет аргумент `HOST` своим стандартным списком хостов
+(`/etc/hosts`, `known_hosts`). Чтобы он предлагал именно алиасы из
+`~/.ssh/config`, добавь в `.zshrc`:
+
+```sh
+zstyle ':completion:*:sshrek:*' hosts ${(f)"$(sshrek ls --porcelain --picker | awk '{print $1}')"}
+```
+
 История — append-only JSONL в `$SSHREK_STATE_DIR/sessions.jsonl`: его можно
 грепать, резать и править руками.
 

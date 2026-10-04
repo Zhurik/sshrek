@@ -147,15 +147,38 @@ pub fn picker_rows(
         .collect()
 }
 
+/// Тот же набор данных, что в таблице, но TSV без выравнивания и заголовка.
 pub fn porcelain_rows(
     hosts: &[HostEntry],
     stats: &HashMap<String, HostStats>,
+    orphans: &[&HostStats],
     now: DateTime<Utc>,
 ) -> Vec<String> {
-    cells_for(hosts, stats, now)
+    let mut cells = cells_for(hosts, stats, now);
+    cells.extend(orphans.iter().map(|s| orphan_cells(s, now)));
+    cells
         .iter()
-        .map(|c| format!("{}\t{}\t{}\t{}", c.alias, c.last, c.count, c.target))
+        .map(|c| {
+            format!(
+                "{}\t{}\t{}\t{}\t{}",
+                c.alias, c.last, c.count, c.total, c.target
+            )
+        })
         .collect()
+}
+
+/// Хост, живущий только в истории: подключиться к нему нельзя, но знать о нём
+/// полезно — и человеку в таблице, и скрипту в porcelain.
+fn orphan_cells(s: &HostStats, now: DateTime<Utc>) -> Cells {
+    Cells {
+        alias: s.host.clone(),
+        last: s
+            .last_connected
+            .map_or_else(|| "never".to_string(), |t| fmt_relative(t, now)),
+        count: format!("{}×", s.connections),
+        total: fmt_duration(s.total_duration),
+        target: "(нет в config)".to_string(),
+    }
 }
 
 pub fn ls_table(
@@ -165,17 +188,7 @@ pub fn ls_table(
     now: DateTime<Utc>,
 ) -> String {
     let mut cells = cells_for(hosts, stats, now);
-    for s in orphans {
-        cells.push(Cells {
-            alias: s.host.clone(),
-            last: s
-                .last_connected
-                .map_or_else(|| "never".to_string(), |t| fmt_relative(t, now)),
-            count: format!("{}×", s.connections),
-            total: fmt_duration(s.total_duration),
-            target: "(нет в config)".to_string(),
-        });
-    }
+    cells.extend(orphans.iter().map(|s| orphan_cells(s, now)));
 
     let header = Cells {
         alias: "HOST".into(),
@@ -365,8 +378,32 @@ mod tests {
     #[test]
     fn porcelain_rows_are_tab_separated_without_padding() {
         let hosts = vec![host("potato", 0)];
-        let rows = porcelain_rows(&hosts, &HashMap::new(), at(0));
-        assert_eq!(rows[0], "potato\tnever\t0×\tpotato");
+        let rows = porcelain_rows(&hosts, &HashMap::new(), &[], at(0));
+        assert_eq!(rows[0], "potato\tnever\t0×\t0s\tpotato");
+    }
+
+    #[test]
+    fn porcelain_carries_the_same_data_as_the_table() {
+        let hosts = vec![host("potato", 0)];
+        let stats = table(vec![stat("potato", 2, Some(9_999_000), 600)]);
+        let gone = stat("retired", 5, Some(9_000_000), 60);
+        let rows = porcelain_rows(&hosts, &stats, &[&gone], at(10_000_000));
+
+        assert_eq!(
+            rows.len(),
+            2,
+            "хост из истории, выпавший из config, тоже в выводе"
+        );
+        let fields: Vec<&str> = rows[0].split('\t').collect();
+        assert_eq!(
+            fields.len(),
+            5,
+            "HOST, LAST, COUNT, TOTAL, TARGET: {:?}",
+            fields
+        );
+        assert_eq!(fields[3], "10m", "длительность доступна машинно");
+        assert!(rows[1].starts_with("retired\t"), "{}", rows[1]);
+        assert!(rows[1].contains("нет в config"), "{}", rows[1]);
     }
 
     #[test]

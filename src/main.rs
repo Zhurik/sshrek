@@ -13,8 +13,19 @@ use sshrek::sort::{self, SortKey};
 use sshrek::{paths, render, runner};
 
 fn main() {
+    restore_default_sigpipe();
     let args = Cli::parse();
     std::process::exit(run(args));
+}
+
+/// Rust глушит SIGPIPE при старте, из-за чего `sshrek ls | head` роняет
+/// программу паникой вместо тихого завершения. Возвращаем поведение,
+/// которого ждут от инструмента в конвейере — как у `cat` или `ls`.
+fn restore_default_sigpipe() {
+    // SAFETY: единственный вызов signal(2) до создания потоков.
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
 }
 
 struct Context {
@@ -107,17 +118,23 @@ fn run(args: Cli) -> i32 {
             let ctx = load(args.verbose);
             let hosts = sorted_hosts(&ctx, sorting.key());
             let now = Utc::now();
+            // Формат пикера — единственный, где хостов из истории быть не должно:
+            // подключиться к тому, чего нет в config, всё равно нельзя.
+            let gone = if *picker_format {
+                Vec::new()
+            } else {
+                orphans(&ctx, &hosts)
+            };
             if *porcelain {
                 let rows = if *picker_format {
                     render::picker_rows(&hosts, &ctx.stats, now)
                 } else {
-                    render::porcelain_rows(&hosts, &ctx.stats, now)
+                    render::porcelain_rows(&hosts, &ctx.stats, &gone, now)
                 };
                 for row in rows {
                     println!("{row}");
                 }
             } else {
-                let gone = orphans(&ctx, &hosts);
                 println!("{}", render::ls_table(&hosts, &ctx.stats, &gone, now));
             }
             0

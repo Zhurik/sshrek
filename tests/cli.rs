@@ -260,6 +260,25 @@ fn completions_are_generated_for_zsh() {
 }
 
 #[test]
+fn host_completion_offers_hosts_not_files() {
+    let e = env();
+    let out = e.cmd().args(["completions", "zsh"]).output().unwrap();
+    let script = String::from_utf8(out.stdout).unwrap();
+
+    let host_lines: Vec<&str> = script
+        .lines()
+        .filter(|l| l.contains(":host") && !l.contains("SSH_ARGS"))
+        .collect();
+    assert!(!host_lines.is_empty(), "аргумент host есть в скрипте");
+    for line in host_lines {
+        assert!(
+            !line.contains("_default") && !line.contains("_files"),
+            "host не должен дополняться именами файлов: {line}"
+        );
+    }
+}
+
+#[test]
 fn unreadable_log_is_reported_not_mistaken_for_an_empty_history() {
     let e = env();
     let state = e.dir.path().join("state");
@@ -272,4 +291,31 @@ fn unreadable_log_is_reported_not_mistaken_for_an_empty_history() {
         .assert()
         .code(1)
         .stderr(contains("история не прочитана"));
+}
+
+#[test]
+fn piping_a_long_listing_into_head_does_not_panic() {
+    let e = env();
+    // Вывод заведомо больше буфера трубы, чтобы head закрыл её на полуслове.
+    let many: String = (0..5000).map(|i| format!("Host h{i}\n")).collect();
+    let big = e.dir.path().join("big_config");
+    std::fs::write(&big, many).unwrap();
+
+    let out = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(format!(
+            "{} ls --porcelain | head -1",
+            assert_cmd::cargo::cargo_bin("sshrek").display()
+        ))
+        .env("SSHREK_SSH_CONFIG", &big)
+        .env("SSHREK_STATE_DIR", e.dir.path().join("state"))
+        .output()
+        .unwrap();
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        !stderr.contains("panicked"),
+        "паника вместо тихого выхода: {stderr}"
+    );
+    assert!(!stderr.contains("Broken pipe"), "{stderr}");
 }
