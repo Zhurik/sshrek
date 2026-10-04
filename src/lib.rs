@@ -6,5 +6,6 @@
 pub mod config;
 pub mod history;
 pub mod paths;
+pub mod picker;
 pub mod render;
 pub mod sort;
