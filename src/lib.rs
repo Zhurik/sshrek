@@ -4,4 +4,5 @@
 //! так каждый модуль остаётся публичным API и тестируется в одиночку.
 
 pub mod config;
+pub mod history;
 pub mod paths;
