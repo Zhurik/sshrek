@@ -29,16 +29,17 @@ fn load(verbose: bool) -> Context {
     let hosts = config::parse_file(&paths::ssh_config());
     let store = Store::new(paths::sessions_log());
     let read = store.read_all();
-    if verbose {
-        if let Some(e) = &read.error {
-            eprintln!("sshrek: история не прочитана: {e}");
-        }
-        if read.malformed > 0 || read.unknown_version > 0 {
-            eprintln!(
-                "sshrek: в логе пропущено строк: битых {}, с другой версией схемы {}",
-                read.malformed, read.unknown_version
-            );
-        }
+    // Ошибка чтения печатается всегда: иначе целая история, ставшая
+    // недоступной, выглядит как её отсутствие. Под --verbose прячутся
+    // только счётчики пропущенных строк.
+    if let Some(e) = &read.error {
+        eprintln!("sshrek: история не прочитана: {e}");
+    }
+    if verbose && (read.malformed > 0 || read.unknown_version > 0) {
+        eprintln!(
+            "sshrek: в логе пропущено строк: битых {}, с другой версией схемы {}",
+            read.malformed, read.unknown_version
+        );
     }
     let stats = history::aggregate(&read.records);
     let last_host = history::last_host(&read.records).map(str::to_string);
@@ -146,13 +147,20 @@ fn connect_flow(args: &Cli) -> i32 {
                 );
                 return 1;
             }
+            let picker_env = std::env::var("SSHREK_PICKER").ok();
+            let args_env = std::env::var("SSHREK_PICKER_ARGS").ok();
             let rows = render::picker_rows(&hosts, &ctx.stats, Utc::now());
             let self_exe = std::env::current_exe()
                 .map(|p| p.to_string_lossy().into_owned())
                 .unwrap_or_else(|_| "sshrek".to_string());
-            let picker_env = std::env::var("SSHREK_PICKER").ok();
-            let args_env = std::env::var("SSHREK_PICKER_ARGS").ok();
-
+            // Проверяем терминал только для пикера по умолчанию: fzf без TTY
+            // не падает, а виснет навсегда. Свой пикер пользователь задал сам —
+            // его требования нам неизвестны, и мешать ему мы не вправе.
+            let terminal_ok = picker_env.is_some() || picker::has_controlling_terminal();
+            if let Err(e) = picker::ensure_terminal(terminal_ok) {
+                eprintln!("sshrek: {e}");
+                return 1;
+            }
             let cmd = match picker::build_command(
                 picker_env.as_deref(),
                 args_env.as_deref(),

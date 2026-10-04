@@ -258,3 +258,18 @@ fn completions_are_generated_for_zsh() {
         .success()
         .stdout(contains("#compdef sshrek"));
 }
+
+#[test]
+fn unreadable_log_is_reported_not_mistaken_for_an_empty_history() {
+    let e = env();
+    let state = e.dir.path().join("state");
+    std::fs::create_dir_all(&state).unwrap();
+    // Каталог вместо файла: лог существует, но прочитать его нельзя.
+    std::fs::create_dir(state.join("sessions.jsonl")).unwrap();
+
+    e.cmd()
+        .arg("-")
+        .assert()
+        .code(1)
+        .stderr(contains("история не прочитана"));
+}

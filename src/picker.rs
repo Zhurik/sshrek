@@ -69,6 +69,21 @@ pub fn build_command(
     Ok(PickerCmd { program, args })
 }
 
+/// Есть ли у процесса управляющий терминал.
+///
+/// fzf без него не выходит с ошибкой, а виснет в ожидании ввода, которого
+/// не будет: запуск из cron или демона иначе накапливал бы мёртвые процессы.
+pub fn has_controlling_terminal() -> bool {
+    std::fs::File::open("/dev/tty").is_ok()
+}
+
+pub fn ensure_terminal(present: bool) -> Result<()> {
+    if present {
+        return Ok(());
+    }
+    bail!("для выбора хоста нужен терминал — если запускаешь не в нём, укажи хост явно: sshrek <host>")
+}
+
 pub fn run(cmd: &PickerCmd, rows: &[String]) -> Result<PickOutcome> {
     let mut child = Command::new(&cmd.program)
         .args(&cmd.args)
@@ -182,6 +197,14 @@ mod tests {
             build_command(Some("   "), None, "/bin/sshrek").is_ok(),
             "пустое значение = дефолт"
         );
+    }
+
+    #[test]
+    fn without_a_controlling_terminal_we_refuse_before_launching_the_picker() {
+        let err = ensure_terminal(false).unwrap_err().to_string();
+        assert!(err.contains("терминал"), "{err}");
+        assert!(err.contains("sshrek <host>"), "подсказываем выход: {err}");
+        assert!(ensure_terminal(true).is_ok());
     }
 
     #[test]
