@@ -37,7 +37,10 @@ struct Context {
 }
 
 fn load(verbose: bool) -> Context {
-    let hosts = config::parse_file(&paths::ssh_config());
+    let (hosts, config_error) = config::parse_file(&paths::ssh_config());
+    if let Some(e) = config_error {
+        eprintln!("sshrek: конфиг не прочитан: {e}");
+    }
     let store = Store::new(paths::sessions_log());
     let read = store.read_all();
     // Ошибка чтения печатается всегда: иначе целая история, ставшая

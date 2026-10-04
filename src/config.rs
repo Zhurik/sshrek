@@ -12,16 +12,21 @@ pub struct HostEntry {
     pub order: usize,
 }
 
-pub fn parse_file(path: &Path) -> Vec<HostEntry> {
-    let Ok(src) = std::fs::read_to_string(path) else {
-        return Vec::new();
+/// Читает конфиг и возвращает хосты вместе с причиной, если файл есть,
+/// но прочитать его не удалось. Отсутствующий файл — не ошибка: список
+/// просто пуст, и `sshrek <host>` продолжает работать.
+pub fn parse_file(path: &Path) -> (Vec<HostEntry>, Option<String>) {
+    let src = match std::fs::read_to_string(path) {
+        Ok(src) => src,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return (Vec::new(), None),
+        Err(e) => return (Vec::new(), Some(format!("{}: {e}", path.display()))),
     };
     let mut p = Parser::default();
     p.visited
         .insert(path.canonicalize().unwrap_or_else(|_| path.to_path_buf()));
     let base = path.parent().unwrap_or(Path::new(".")).to_path_buf();
     p.feed(&src, &base, 0);
-    p.entries
+    (p.entries, None)
 }
 
 #[derive(Default)]
@@ -267,7 +272,24 @@ mod tests {
 
     #[test]
     fn missing_file_yields_no_hosts() {
-        assert!(parse_file(Path::new("/nope/definitely/not/here")).is_empty());
+        let (hosts, error) = parse_file(Path::new("/nope/definitely/not/here"));
+        assert!(hosts.is_empty());
+        assert!(error.is_none(), "отсутствие конфига — не ошибка");
+    }
+
+    #[test]
+    fn unreadable_file_is_reported_separately_from_an_empty_one() {
+        let dir = tempfile::tempdir().unwrap();
+        // Каталог вместо файла: конфиг есть, но прочитать его нельзя.
+        let as_dir = dir.path().join("config");
+        std::fs::create_dir(&as_dir).unwrap();
+
+        let (hosts, error) = parse_file(&as_dir);
+        assert!(hosts.is_empty());
+        assert!(
+            error.is_some(),
+            "нечитаемый конфиг нельзя выдавать за конфиг без хостов"
+        );
     }
 
     #[test]
@@ -281,7 +303,7 @@ mod tests {
         let main = dir.path().join("config");
         std::fs::write(&main, "Host top\nInclude extra\n").unwrap();
 
-        let hosts = parse_file(&main);
+        let (hosts, _) = parse_file(&main);
         assert_eq!(
             hosts.iter().map(|h| h.alias.as_str()).collect::<Vec<_>>(),
             vec!["top", "included"]
@@ -297,7 +319,7 @@ mod tests {
         std::fs::write(&a, "Host a\nInclude b\n").unwrap();
         std::fs::write(&b, "Host b\nInclude a\n").unwrap();
 
-        let hosts = parse_file(&a);
+        let (hosts, _) = parse_file(&a);
         assert_eq!(
             hosts.iter().map(|h| h.alias.as_str()).collect::<Vec<_>>(),
             vec!["a", "b"]
@@ -312,7 +334,7 @@ mod tests {
         let main = dir.path().join("config");
         std::fs::write(&main, "Include *.conf\n").unwrap();
 
-        let mut aliases: Vec<String> = parse_file(&main).into_iter().map(|h| h.alias).collect();
+        let mut aliases: Vec<String> = parse_file(&main).0.into_iter().map(|h| h.alias).collect();
         aliases.sort();
         assert_eq!(aliases, vec!["one", "two"]);
     }
