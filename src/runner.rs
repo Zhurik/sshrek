@@ -1,3 +1,4 @@
+use std::os::unix::process::CommandExt;
 use std::process::Command;
 use std::time::SystemTime;
 
@@ -7,7 +8,10 @@ use crate::history::{new_session_id, Record, Store};
 
 /// На время ожидания ssh родитель перестаёт умирать от Ctrl-C: иначе
 /// end-событие не запишется и сессия навсегда останется незавершённой.
-/// Сам ssh свой SIGINT получает как обычно — он в той же foreground-группе.
+///
+/// Игнорируемая диспозиция переживает fork+exec, поэтому ребёнку её возвращают
+/// в SIG_DFL (см. `spawn_ssh`): без этого Ctrl-C не дошёл бы и до самого ssh,
+/// и `sshrek host -- -N -L …` стало бы невозможно остановить с клавиатуры.
 struct SignalGuard {
     int: libc::sighandler_t,
     quit: libc::sighandler_t,
@@ -43,10 +47,10 @@ pub fn connect(store: &Store, ssh_bin: &str, host: &str, extra: &[String]) -> i3
     let id = new_session_id(SystemTime::now(), std::process::id());
     warn_on_err(store.append(&Record::start(id.clone(), host, Utc::now(), extra)));
 
-    let status = {
-        let _guard = SignalGuard::ignore_interrupts();
-        Command::new(ssh_bin).arg(host).args(extra).status()
-    };
+    // Guard живёт до самого конца: Ctrl-C между wait и записью end оставил бы
+    // сессию навсегда незавершённой.
+    let _guard = SignalGuard::ignore_interrupts();
+    let status = spawn_ssh(ssh_bin, host, extra);
 
     match status {
         Ok(st) => {
@@ -60,6 +64,24 @@ pub fn connect(store: &Store, ssh_bin: &str, host: &str, extra: &[String]) -> i3
             1
         }
     }
+}
+
+fn spawn_ssh(
+    ssh_bin: &str,
+    host: &str,
+    extra: &[String],
+) -> std::io::Result<std::process::ExitStatus> {
+    let mut cmd = Command::new(ssh_bin);
+    cmd.arg(host).args(extra);
+    // SAFETY: между fork и exec зовётся только signal(2) — он async-signal-safe.
+    unsafe {
+        cmd.pre_exec(|| {
+            libc::signal(libc::SIGINT, libc::SIG_DFL);
+            libc::signal(libc::SIGQUIT, libc::SIG_DFL);
+            Ok(())
+        });
+    }
+    cmd.status()
 }
 
 fn exit_code_of(status: &std::process::ExitStatus) -> i32 {
@@ -165,6 +187,22 @@ mod tests {
             }
             other => panic!("ожидали End, получили {other:?}"),
         }
+    }
+
+    #[test]
+    fn ssh_child_gets_default_sigint_not_the_parents_ignore() {
+        let dir = tempfile::tempdir().unwrap();
+        // Скрипт шлёт SIGINT сам себе: с унаследованным от родителя SIG_IGN он
+        // это переживёт и выйдет с нулём, с дефолтной диспозицией — умрёт от сигнала.
+        let ssh = fake_ssh(dir.path(), "kill -INT $$\nexit 0");
+        let store = Store::new(dir.path().join("sessions.jsonl"));
+
+        let code = connect(&store, &ssh, "potato", &[]);
+
+        assert_eq!(
+            code, 130,
+            "ssh должен получать SIGINT по умолчанию (128+2), а не наследовать SIG_IGN родителя"
+        );
     }
 
     // Review Focus 5: сломанный лог не мешает подключению

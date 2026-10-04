@@ -29,14 +29,16 @@ impl Store {
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("не удалось создать {}", parent.display()))?;
         }
-        let line = serde_json::to_string(rec).context("сериализация события")?;
+        let mut line = serde_json::to_string(rec).context("сериализация события")?;
+        // Перевод строки уходит тем же write: O_APPEND атомарен для одного вызова,
+        // но не для пары — иначе параллельные запуски склеивают строки.
+        line.push('\n');
         let mut file = OpenOptions::new()
             .create(true)
             .append(true)
             .open(&self.path)
             .with_context(|| format!("не удалось открыть {}", self.path.display()))?;
         file.write_all(line.as_bytes())
-            .and_then(|()| file.write_all(b"\n"))
             .with_context(|| format!("не удалось записать в {}", self.path.display()))
     }
 
@@ -118,6 +120,33 @@ mod tests {
         let out = Store::new("/nope/not/here/sessions.jsonl".into()).read_all();
         assert!(out.records.is_empty());
         assert!(out.error.is_none(), "отсутствие истории — не ошибка");
+    }
+
+    #[test]
+    fn concurrent_appends_never_interleave_within_a_line() {
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("sessions.jsonl");
+
+        // O_APPEND делает атомарным каждый write, но не пару write'ов:
+        // запись строки и перевода строки по отдельности позволяет соседнему
+        // процессу вклиниться между ними.
+        std::thread::scope(|scope| {
+            for t in 0..8 {
+                let log = log.clone();
+                scope.spawn(move || {
+                    let store = Store::new(log);
+                    for i in 0..100 {
+                        store
+                            .append(&rec(&format!("{t}-{i}"), "potato", 1))
+                            .unwrap();
+                    }
+                });
+            }
+        });
+
+        let out = Store::new(log).read_all();
+        assert_eq!(out.malformed, 0, "битых строк быть не должно");
+        assert_eq!(out.records.len(), 800, "ни одна запись не потеряна");
     }
 
     // Review Focus 5
