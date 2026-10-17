@@ -87,5 +87,20 @@ pub enum Command {
     Completions {
         #[arg(value_name = "SHELL")]
         shell: Shell,
+
+        /// Complete this command name instead of `sshrek` (for a custom alias)
+        #[arg(long, value_name = "NAME")]
+        name: Option<String>,
+    },
+
+    /// Shell snippet defining a custom alias with its completion; use with eval
+    Alias {
+        /// Name to bind sshrek to
+        #[arg(value_name = "NAME", default_value = crate::alias::DEFAULT_ALIAS)]
+        name: String,
+
+        /// Shell to emit for; taken from $SHELL when omitted
+        #[arg(long, value_name = "SHELL")]
+        shell: Option<Shell>,
     },
 }

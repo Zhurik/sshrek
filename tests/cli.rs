@@ -326,3 +326,95 @@ fn piping_a_long_listing_into_head_does_not_panic() {
     );
     assert!(!stderr.contains("Broken pipe"), "{stderr}");
 }
+
+#[test]
+fn alias_defaults_to_cssh_and_wires_its_completion() {
+    let out = sshrek().args(["alias", "--shell", "zsh"]).output().unwrap();
+    let text = String::from_utf8(out.stdout).unwrap();
+
+    assert!(
+        text.lines().next().unwrap().starts_with("cssh() {"),
+        "the definition comes first: {:?}",
+        text.lines().next()
+    );
+    assert!(
+        text.contains("compdef _cssh cssh"),
+        "completion is registered for the alias, not for sshrek"
+    );
+    assert!(!text.contains("compdef _sshrek"), "{text}");
+}
+
+#[test]
+fn alias_name_and_shell_are_both_configurable() {
+    let out = sshrek()
+        .args(["alias", "s", "--shell", "bash"])
+        .output()
+        .unwrap();
+    let text = String::from_utf8(out.stdout).unwrap();
+
+    assert!(text.starts_with("s() {"), "{text}");
+    assert!(
+        text.contains("complete -F _s"),
+        "bash completion for s: {text}"
+    );
+}
+
+#[test]
+fn alias_points_the_binary_at_its_own_absolute_path() {
+    let out = sshrek().args(["alias", "--shell", "zsh"]).output().unwrap();
+    let first = String::from_utf8(out.stdout).unwrap();
+    let first = first.lines().next().unwrap().to_string();
+
+    let target = assert_cmd::cargo::cargo_bin("sshrek");
+    assert!(
+        first.contains(target.to_str().unwrap()),
+        "an alias must work for a binary outside PATH: {first}"
+    );
+}
+
+#[test]
+fn completions_can_be_generated_under_a_custom_name() {
+    let out = sshrek()
+        .args(["completions", "zsh", "--name", "cssh"])
+        .output()
+        .unwrap();
+    let text = String::from_utf8(out.stdout).unwrap();
+
+    assert!(text.starts_with("#compdef cssh"), "{text}");
+    assert!(!text.contains("#compdef sshrek"), "{text}");
+}
+
+#[test]
+fn an_unusable_alias_name_is_refused_before_anything_is_printed() {
+    sshrek()
+        .args(["alias", "two words", "--shell", "zsh"])
+        .assert()
+        .code(1)
+        .stdout(predicates::str::is_empty())
+        .stderr(contains("not a usable command name"));
+
+    sshrek()
+        .args(["completions", "zsh", "--name", "a;b"])
+        .assert()
+        .code(1)
+        .stderr(contains("not a usable command name"));
+}
+
+#[test]
+fn a_shell_without_alias_syntax_is_told_to_use_completions_instead() {
+    sshrek()
+        .args(["alias", "cssh", "--shell", "elvish"])
+        .assert()
+        .code(1)
+        .stderr(contains("--name cssh"));
+}
+
+#[test]
+fn an_undetectable_shell_asks_for_the_flag() {
+    sshrek()
+        .arg("alias")
+        .env_remove("SHELL")
+        .assert()
+        .code(1)
+        .stderr(contains("--shell zsh"));
+}

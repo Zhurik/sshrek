@@ -23,6 +23,7 @@ drop the binary into your `PATH`.
 | `sshrek ls` | table of hosts and history |
 | `sshrek ls -r` / `-f` | sort by recency / frequency |
 | `sshrek completions zsh` | completion script |
+| `sshrek alias cssh` | shell snippet binding the tool to another name |
 
 Inside the picker: `ctrl-o` — config order, `ctrl-r` — most recent first,
 `ctrl-f` — most frequent first.
@@ -50,6 +51,63 @@ list (`/etc/hosts`, `known_hosts`). To make it offer the aliases from
 ```sh
 zstyle ':completion:*:sshrek:*' hosts ${(f)"$(sshrek ls --porcelain --picker | awk '{print $1}')"}
 ```
+
+## Running it under another name
+
+`sshrek alias` prints a shell snippet that binds the tool to a name of your
+choosing, completion included. Add one line to your shell's startup file:
+
+```sh
+eval "$(sshrek alias cssh)"
+```
+
+That is all: `cssh`, `cssh -`, `cssh ls`, `cssh <host>` and tab completion all
+work exactly like the `sshrek` originals. The name is just an argument, so pick
+whatever you like — `eval "$(sshrek alias s)"` gives you a one-letter `s`. With
+no argument the name defaults to `cssh`.
+
+The shell is taken from `$SHELL`; pass `--shell` when that is wrong or unset:
+
+```sh
+eval "$(sshrek alias cssh --shell bash)"
+```
+
+Per shell, the line to add is:
+
+| Shell | File | Line |
+|---|---|---|
+| zsh | `.zshrc` | `eval "$(sshrek alias cssh)"` — **after** your `compinit` |
+| bash | `.bashrc` | `eval "$(sshrek alias cssh)"` |
+| fish | `config.fish` | `sshrek alias cssh --shell fish \| source` |
+
+Two details worth knowing:
+
+- **zsh: put it after `compinit`.** The snippet registers completion with
+  `compdef`, which does not exist until `compinit` has run. Too early and zsh
+  prints `command not found: compdef`.
+- **The host-completion `zstyle` is per command name.** If you set up the
+  `~/.ssh/config` host list above, repeat it for the new name — the context in
+  the pattern is the command you actually type:
+
+  ```sh
+  zstyle ':completion:*:cssh:*' hosts ${(f)"$(cssh ls --porcelain --picker | awk '{print $1}')"}
+  ```
+
+If you would rather not run `sshrek` on every shell startup, install a
+completion file under the new name instead and define the function yourself:
+
+```sh
+sshrek completions zsh --name cssh > ~/.zfunc/_cssh
+# in .zshrc:
+cssh() { command sshrek "$@"; }
+```
+
+What `sshrek alias` emits is a shell *function*, not an `alias`. bash expands no
+aliases at all in a non-interactive shell, and both bash and zsh expand them
+when a command is parsed rather than when it runs — an alias would therefore be
+invisible to the rest of the same script. A function has neither limit, so
+`cssh` also works from scripts, while `complete`/`compdef` bind to it just the
+same.
 
 The history is an append-only JSONL file at `$SSHREK_STATE_DIR/sessions.jsonl`:
 grep it, cut it, edit it by hand.

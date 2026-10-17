@@ -4,7 +4,9 @@ use std::collections::HashMap;
 
 use chrono::Utc;
 use clap::{CommandFactory, Parser};
+use clap_complete::Shell;
 
+use sshrek::alias;
 use sshrek::cli::{Cli, Command};
 use sshrek::config::{self, HostEntry};
 use sshrek::history::{self, HostStats, Store};
@@ -96,14 +98,55 @@ fn orphans<'a>(ctx: &'a Context, hosts: &[HostEntry]) -> Vec<&'a HostStats> {
     out
 }
 
+/// Absolute path to this binary, so a generated snippet keeps working for a
+/// binary that is not in `PATH`.
+fn self_exe() -> String {
+    std::env::current_exe()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| "sshrek".to_string())
+}
+
+fn emit_completions(shell: Shell, name: Option<&str>) -> i32 {
+    let mut cmd = Cli::command();
+    let bin = match name {
+        Some(n) => {
+            if let Err(e) = alias::check_name(n) {
+                eprintln!("sshrek: {e}");
+                return 1;
+            }
+            n.to_string()
+        }
+        None => cmd.get_name().to_string(),
+    };
+    clap_complete::generate(shell, &mut cmd, bin, &mut std::io::stdout());
+    0
+}
+
+/// The alias definition plus the completion script generated under that same
+/// name, so one `eval` makes the alias complete like `sshrek` itself.
+fn emit_alias(name: &str, shell: Option<Shell>) -> i32 {
+    let Some(shell) = shell.or_else(Shell::from_env) else {
+        eprintln!(
+            "sshrek: could not tell the shell from $SHELL — name it: sshrek alias {name} --shell zsh"
+        );
+        return 1;
+    };
+    match alias::definition(name, shell, &self_exe()) {
+        Ok(definition) => {
+            print!("{definition}");
+            emit_completions(shell, Some(name))
+        }
+        Err(e) => {
+            eprintln!("sshrek: {e}");
+            1
+        }
+    }
+}
+
 fn run(args: Cli) -> i32 {
     match &args.command {
-        Some(Command::Completions { shell }) => {
-            let mut cmd = Cli::command();
-            let name = cmd.get_name().to_string();
-            clap_complete::generate(*shell, &mut cmd, name, &mut std::io::stdout());
-            0
-        }
+        Some(Command::Completions { shell, name }) => emit_completions(*shell, name.as_deref()),
+        Some(Command::Alias { name, shell }) => emit_alias(name, *shell),
         Some(Command::Preview { host }) => {
             let ctx = load(args.verbose);
             let entry = ctx.hosts.iter().find(|h| &h.alias == host);
@@ -170,9 +213,7 @@ fn connect_flow(args: &Cli) -> i32 {
             let picker_env = std::env::var("SSHREK_PICKER").ok();
             let args_env = std::env::var("SSHREK_PICKER_ARGS").ok();
             let rows = render::picker_rows(&hosts, &ctx.stats, Utc::now());
-            let self_exe = std::env::current_exe()
-                .map(|p| p.to_string_lossy().into_owned())
-                .unwrap_or_else(|_| "sshrek".to_string());
+            let self_exe = self_exe();
             // Check for a terminal only for the default picker: without a TTY fzf
             // does not fail, it hangs forever. A custom picker was chosen by the
             // user — we do not know its requirements and have no right to interfere.
