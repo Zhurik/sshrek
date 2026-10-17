@@ -9,11 +9,11 @@ use crate::history::HostStats;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 #[value(rename_all = "lower")]
 pub enum SortKey {
-    /// Порядок объявления в ~/.ssh/config
+    /// Declaration order in ~/.ssh/config
     Config,
-    /// Свежие подключения сверху
+    /// Most recently used first
     Recent,
-    /// Частые подключения сверху
+    /// Most frequently used first
     Frequent,
 }
 
@@ -112,7 +112,7 @@ mod tests {
             stat("c", 2, Some(900)),
         ]);
         sort_hosts(&mut hosts, &stats, SortKey::Frequent);
-        // b (5), затем c и a по 2 — c свежее, затем d без истории
+        // b (5), then c and a with 2 each — c is fresher, then d with no history
         assert_eq!(aliases(&hosts), vec!["b", "c", "a", "d"]);
     }
 
@@ -124,7 +124,11 @@ mod tests {
             let mut second = vec![host("b", 1), host("a", 0)];
             sort_hosts(&mut first, &stats, key);
             sort_hosts(&mut second, &stats, key);
-            assert_eq!(aliases(&first), aliases(&second), "ключ {key:?} даёт ничью");
+            assert_eq!(
+                aliases(&first),
+                aliases(&second),
+                "key {key:?} leaves a tie"
+            );
         }
     }
 }

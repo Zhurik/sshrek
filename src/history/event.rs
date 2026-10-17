@@ -7,7 +7,7 @@ pub const SCHEMA_VERSION: u32 = 1;
 
 pub type SessionId = String;
 
-/// `<наносекунды в hex>-<pid в hex>`: уникально без генератора UUID и читаемо глазами.
+/// `<nanos in hex>-<pid in hex>`: unique without a UUID generator and still readable by eye.
 pub fn new_session_id(now: SystemTime, pid: u32) -> SessionId {
     let nanos = now
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -75,8 +75,8 @@ pub enum LineOutcome {
     Malformed,
 }
 
-/// Сначала смотрим только на `v`: строка будущей схемы должна пропускаться,
-/// а не считаться битой.
+/// Look at `v` first: a line from a future schema must be skipped
+/// rather than counted as malformed.
 pub fn parse_line(line: &str) -> LineOutcome {
     let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
         return LineOutcome::Malformed;
@@ -106,7 +106,10 @@ mod tests {
         let json = serde_json::to_string(&rec).unwrap();
         assert!(json.starts_with(r#"{"v":1,"event":"start""#), "{json}");
         assert!(json.contains(r#""host":"potato""#), "{json}");
-        assert!(!json.contains("args"), "пустые args не пишем: {json}");
+        assert!(
+            !json.contains("args"),
+            "empty args are not written out: {json}"
+        );
     }
 
     #[test]
@@ -115,7 +118,7 @@ mod tests {
         let json = serde_json::to_string(&rec).unwrap();
         match parse_line(&json) {
             LineOutcome::Parsed(back) => assert_eq!(back, rec),
-            other => panic!("ожидали Parsed, получили {other:?}"),
+            other => panic!("expected Parsed, got {other:?}"),
         }
     }
 
@@ -143,7 +146,7 @@ mod tests {
             LineOutcome::Malformed
         ));
         assert!(matches!(
-            parse_line("не json вовсе"),
+            parse_line("not json at all"),
             LineOutcome::Malformed
         ));
         assert!(matches!(
@@ -158,6 +161,6 @@ mod tests {
         let a = new_session_id(base, 42);
         let b = new_session_id(base + std::time::Duration::from_nanos(1), 42);
         assert_ne!(a, b);
-        assert!(a.contains('-'), "id читаем глазами: {a}");
+        assert!(a.contains('-'), "the id is readable by eye: {a}");
     }
 }

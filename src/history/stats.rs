@@ -31,7 +31,7 @@ impl HostStats {
 
 pub fn aggregate(records: &[Record]) -> HashMap<String, HostStats> {
     let mut out: HashMap<String, HostStats> = HashMap::new();
-    // id -> (хост, момент старта); закрытые сессии удаляются, остаток — незавершённые.
+    // id -> (host, start moment); closed sessions are removed, what remains is unfinished.
     let mut open: HashMap<&str, (&str, DateTime<Utc>)> = HashMap::new();
 
     for rec in records {
@@ -59,7 +59,7 @@ pub fn aggregate(records: &[Record]) -> HashMap<String, HostStats> {
                 let s = out
                     .entry(host.to_string())
                     .or_insert_with(|| HostStats::new(host));
-                // Часы могли уехать назад: отрицательная длительность — это ноль.
+                // The clock may have jumped backwards: a negative duration counts as zero.
                 let raw = *at - started;
                 let d = if raw < TimeDelta::zero() {
                     TimeDelta::zero()

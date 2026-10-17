@@ -1,7 +1,7 @@
-//! sshrek — обёртка над ssh с историей подключений.
+//! sshrek — an ssh wrapper that keeps a connection history.
 //!
-//! Логика живёт в библиотеке, а `main.rs` только склеивает её команды:
-//! так каждый модуль остаётся публичным API и тестируется в одиночку.
+//! The logic lives in the library and `main.rs` only wires its commands
+//! together: that way every module stays a public API and is testable alone.
 
 pub mod cli;
 pub mod config;

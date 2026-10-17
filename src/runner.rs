@@ -6,12 +6,12 @@ use chrono::Utc;
 
 use crate::history::{new_session_id, Record, Store};
 
-/// На время ожидания ssh родитель перестаёт умирать от Ctrl-C: иначе
-/// end-событие не запишется и сессия навсегда останется незавершённой.
+/// While waiting for ssh the parent stops dying from Ctrl-C: otherwise the end
+/// event would never be written and the session would stay unfinished forever.
 ///
-/// Игнорируемая диспозиция переживает fork+exec, поэтому ребёнку её возвращают
-/// в SIG_DFL (см. `spawn_ssh`): без этого Ctrl-C не дошёл бы и до самого ssh,
-/// и `sshrek host -- -N -L …` стало бы невозможно остановить с клавиатуры.
+/// An ignored disposition survives fork+exec, so the child has it reset to
+/// SIG_DFL (see `spawn_ssh`): without that Ctrl-C would not even reach ssh
+/// itself and `sshrek host -- -N -L …` could never be stopped from the keyboard.
 struct SignalGuard {
     int: libc::sighandler_t,
     quit: libc::sighandler_t,
@@ -39,7 +39,7 @@ impl Drop for SignalGuard {
 
 fn warn_on_err(result: anyhow::Result<()>) {
     if let Err(e) = result {
-        eprintln!("sshrek: история не записана: {e}");
+        eprintln!("sshrek: history not written: {e}");
     }
 }
 
@@ -47,8 +47,8 @@ pub fn connect(store: &Store, ssh_bin: &str, host: &str, extra: &[String]) -> i3
     let id = new_session_id(SystemTime::now(), std::process::id());
     warn_on_err(store.append(&Record::start(id.clone(), host, Utc::now(), extra)));
 
-    // Guard живёт до самого конца: Ctrl-C между wait и записью end оставил бы
-    // сессию навсегда незавершённой.
+    // The guard lives to the very end: a Ctrl-C between the wait and the end
+    // record would leave the session unfinished forever.
     let _guard = SignalGuard::ignore_interrupts();
     let status = spawn_ssh(ssh_bin, host, extra);
 
@@ -59,7 +59,7 @@ pub fn connect(store: &Store, ssh_bin: &str, host: &str, extra: &[String]) -> i3
             code
         }
         Err(e) => {
-            eprintln!("sshrek: не удалось запустить '{ssh_bin}' (см. SSHREK_SSH_BIN): {e}");
+            eprintln!("sshrek: could not launch '{ssh_bin}' (see SSHREK_SSH_BIN): {e}");
             warn_on_err(store.append(&Record::end(id, Utc::now(), None, Some(e.to_string()))));
             1
         }
@@ -73,7 +73,7 @@ fn spawn_ssh(
 ) -> std::io::Result<std::process::ExitStatus> {
     let mut cmd = Command::new(ssh_bin);
     cmd.arg(host).args(extra);
-    // SAFETY: между fork и exec зовётся только signal(2) — он async-signal-safe.
+    // SAFETY: between fork and exec only signal(2) is called — it is async-signal-safe.
     unsafe {
         cmd.pre_exec(|| {
             libc::signal(libc::SIGINT, libc::SIG_DFL);
@@ -113,7 +113,7 @@ mod tests {
         let store = Store::new(dir.path().join("sessions.jsonl"));
 
         let code = connect(&store, &ssh, "potato", &[]);
-        assert_eq!(code, 7, "код ssh прокидывается как есть");
+        assert_eq!(code, 7, "the ssh exit code is passed through as is");
 
         let recs = store.read_all().records;
         assert_eq!(recs.len(), 2);
@@ -128,11 +128,11 @@ mod tests {
                 },
             ) => {
                 assert_eq!(host, "potato");
-                assert_eq!(sid, eid, "end ссылается на тот же id");
+                assert_eq!(sid, eid, "end refers to the same id");
                 assert_eq!(*exit, Some(7));
                 assert!(error.is_none());
             }
-            other => panic!("ожидали start+end, получили {other:?}"),
+            other => panic!("expected start+end, got {other:?}"),
         }
     }
 
@@ -166,7 +166,7 @@ mod tests {
 
         match &store.read_all().records[0].event {
             Event::Start { args, .. } => assert_eq!(args, &vec!["-v".to_string()]),
-            other => panic!("ожидали Start, получили {other:?}"),
+            other => panic!("expected Start, got {other:?}"),
         }
     }
 
@@ -179,21 +179,25 @@ mod tests {
         assert_eq!(code, 1);
 
         let recs = store.read_all().records;
-        assert_eq!(recs.len(), 2, "start уже записан, поэтому пишем и end");
+        assert_eq!(
+            recs.len(),
+            2,
+            "start is already written, so end is written too"
+        );
         match &recs[1].event {
             Event::End { exit, error, .. } => {
                 assert_eq!(*exit, None);
-                assert!(error.is_some(), "причина неудачного запуска сохранена");
+                assert!(error.is_some(), "the reason the launch failed is kept");
             }
-            other => panic!("ожидали End, получили {other:?}"),
+            other => panic!("expected End, got {other:?}"),
         }
     }
 
     #[test]
     fn ssh_child_gets_default_sigint_not_the_parents_ignore() {
         let dir = tempfile::tempdir().unwrap();
-        // Скрипт шлёт SIGINT сам себе: с унаследованным от родителя SIG_IGN он
-        // это переживёт и выйдет с нулём, с дефолтной диспозицией — умрёт от сигнала.
+        // The script sends SIGINT to itself: with the parent's SIG_IGN inherited it
+        // survives and exits zero; with the default disposition it dies from the signal.
         let ssh = fake_ssh(dir.path(), "kill -INT $$\nexit 0");
         let store = Store::new(dir.path().join("sessions.jsonl"));
 
@@ -201,17 +205,17 @@ mod tests {
 
         assert_eq!(
             code, 130,
-            "ssh должен получать SIGINT по умолчанию (128+2), а не наследовать SIG_IGN родителя"
+            "ssh must get the default SIGINT (128+2) instead of inheriting the parent's SIG_IGN"
         );
     }
 
-    // Review Focus 5: сломанный лог не мешает подключению
+    // Review Focus 5: a broken log does not get in the way of connecting
     #[test]
     fn connection_succeeds_even_when_the_log_cannot_be_written() {
         let dir = tempfile::tempdir().unwrap();
         let ssh = fake_ssh(dir.path(), "exit 0");
         let busy = dir.path().join("state");
-        std::fs::write(&busy, "я файл").unwrap();
+        std::fs::write(&busy, "i am a file").unwrap();
         let store = Store::new(busy.join("sessions.jsonl"));
 
         assert_eq!(connect(&store, &ssh, "potato", &[]), 0);

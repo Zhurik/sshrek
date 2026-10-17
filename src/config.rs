@@ -12,9 +12,9 @@ pub struct HostEntry {
     pub order: usize,
 }
 
-/// Читает конфиг и возвращает хосты вместе с причиной, если файл есть,
-/// но прочитать его не удалось. Отсутствующий файл — не ошибка: список
-/// просто пуст, и `sshrek <host>` продолжает работать.
+/// Reads the config and returns the hosts together with a reason when the file
+/// exists but could not be read. A missing file is not an error: the list is
+/// simply empty and `sshrek <host>` keeps working.
 pub fn parse_file(path: &Path) -> (Vec<HostEntry>, Option<String>) {
     let src = match std::fs::read_to_string(path) {
         Ok(src) => src,
@@ -39,10 +39,10 @@ struct Parser {
 
 impl Parser {
     fn feed(&mut self, src: &str, base: &Path, depth: usize) {
-        // Индексы entries, объявленных текущим блоком Host: опции применяются ко всем.
+        // Indices of entries declared by the current Host block: options apply to all of them.
         let mut block: Vec<usize> = Vec::new();
-        // Внутри блока Match: его условия вычисляются при подключении,
-        // статического списка хостов из них не получить.
+        // Inside a Match block: its conditions are evaluated at connection time,
+        // so no static list of hosts can be derived from them.
         let mut skipping = false;
 
         for raw in src.lines() {
@@ -189,7 +189,7 @@ fn expand_path(p: &str, base: &Path) -> PathBuf {
 mod tests {
     use super::*;
 
-    /// Разбор строки без Include: тестовый хелпер, в рабочем коде не нужен.
+    /// Parses a string without honouring Include: a test helper, unused in production code.
     fn parse_str(src: &str) -> Vec<HostEntry> {
         let mut p = Parser::default();
         p.feed(src, Path::new("."), 0);
@@ -233,7 +233,7 @@ mod tests {
         );
         assert_eq!(
             hosts[0].user, None,
-            "User из блока Host * не должен протечь"
+            "User from a Host * block must not leak through"
         );
     }
 
@@ -274,13 +274,13 @@ mod tests {
     fn missing_file_yields_no_hosts() {
         let (hosts, error) = parse_file(Path::new("/nope/definitely/not/here"));
         assert!(hosts.is_empty());
-        assert!(error.is_none(), "отсутствие конфига — не ошибка");
+        assert!(error.is_none(), "a missing config is not an error");
     }
 
     #[test]
     fn unreadable_file_is_reported_separately_from_an_empty_one() {
         let dir = tempfile::tempdir().unwrap();
-        // Каталог вместо файла: конфиг есть, но прочитать его нельзя.
+        // A directory in place of the file: the config exists but cannot be read.
         let as_dir = dir.path().join("config");
         std::fs::create_dir(&as_dir).unwrap();
 
@@ -288,7 +288,7 @@ mod tests {
         assert!(hosts.is_empty());
         assert!(
             error.is_some(),
-            "нечитаемый конфиг нельзя выдавать за конфиг без хостов"
+            "an unreadable config must not be passed off as one without hosts"
         );
     }
 

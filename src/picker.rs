@@ -17,8 +17,8 @@ pub enum PickOutcome {
     Cancelled,
 }
 
-/// Флаги для fzf. `fzf-tmux` незнакомые ему аргументы передаёт в fzf,
-/// поэтому `SSHREK_PICKER='fzf-tmux -p'` работает с тем же набором.
+/// Flags for fzf. `fzf-tmux` forwards arguments it does not know to fzf,
+/// so `SSHREK_PICKER='fzf-tmux -p'` works with the very same set.
 pub fn default_args(self_exe: &str) -> Vec<String> {
     let me = shell_words::quote(self_exe).to_string();
     vec![
@@ -53,26 +53,26 @@ pub fn build_command(
 ) -> Result<PickerCmd> {
     let spec = non_empty(picker_env).unwrap_or(DEFAULT_PICKER);
     let mut words =
-        shell_words::split(spec).context("SSHREK_PICKER не разбирается как команда шелла")?;
+        shell_words::split(spec).context("SSHREK_PICKER does not parse as a shell command")?;
     if words.is_empty() {
-        bail!("SSHREK_PICKER пуст");
+        bail!("SSHREK_PICKER is empty");
     }
     let program = words.remove(0);
     let mut args = words;
     match non_empty(args_env) {
         Some(custom) => args.extend(
             shell_words::split(custom)
-                .context("SSHREK_PICKER_ARGS не разбирается как аргументы шелла")?,
+                .context("SSHREK_PICKER_ARGS does not parse as shell arguments")?,
         ),
         None => args.extend(default_args(self_exe)),
     }
     Ok(PickerCmd { program, args })
 }
 
-/// Есть ли у процесса управляющий терминал.
+/// Whether the process has a controlling terminal.
 ///
-/// fzf без него не выходит с ошибкой, а виснет в ожидании ввода, которого
-/// не будет: запуск из cron или демона иначе накапливал бы мёртвые процессы.
+/// Without one fzf does not exit with an error, it hangs waiting for input that
+/// will never come: a run from cron or a daemon would pile up dead processes.
 pub fn has_controlling_terminal() -> bool {
     std::fs::File::open("/dev/tty").is_ok()
 }
@@ -81,7 +81,7 @@ pub fn ensure_terminal(present: bool) -> Result<()> {
     if present {
         return Ok(());
     }
-    bail!("для выбора хоста нужен терминал — если запускаешь не в нём, укажи хост явно: sshrek <host>")
+    bail!("picking a host needs a terminal — if you are not in one, name the host explicitly: sshrek <host>")
 }
 
 pub fn run(cmd: &PickerCmd, rows: &[String]) -> Result<PickOutcome> {
@@ -92,15 +92,15 @@ pub fn run(cmd: &PickerCmd, rows: &[String]) -> Result<PickOutcome> {
         .spawn()
         .with_context(|| {
             format!(
-                "не удалось запустить пикер '{}' (задаётся через SSHREK_PICKER)",
+                "could not launch the picker '{}' (set through SSHREK_PICKER)",
                 cmd.program
             )
         })?;
 
     {
-        let mut stdin = child.stdin.take().expect("stdin запрошен как piped");
-        // Пикер мог закрыться раньше, чем мы дописали строки: EPIPE здесь
-        // не ошибка, настоящий вердикт — код выхода.
+        let mut stdin = child.stdin.take().expect("stdin was requested as piped");
+        // The picker may have closed before we finished writing the rows: EPIPE
+        // is no error here, the real verdict is the exit code.
         for row in rows {
             if writeln!(stdin, "{row}").is_err() {
                 break;
@@ -110,7 +110,7 @@ pub fn run(cmd: &PickerCmd, rows: &[String]) -> Result<PickOutcome> {
 
     let out = child
         .wait_with_output()
-        .with_context(|| format!("пикер '{}' не завершился корректно", cmd.program))?;
+        .with_context(|| format!("the picker '{}' did not exit cleanly", cmd.program))?;
 
     match out.status.code() {
         Some(0) => {
@@ -128,10 +128,10 @@ pub fn run(cmd: &PickerCmd, rows: &[String]) -> Result<PickOutcome> {
                 Ok(PickOutcome::Selected(alias.to_string()))
             }
         }
-        // 130 — Esc/Ctrl-C, 1 — ничего не нашлось: для нас это одно и то же.
+        // 130 is Esc/Ctrl-C, 1 is "nothing matched": to us they mean the same thing.
         Some(130) | Some(1) => Ok(PickOutcome::Cancelled),
         Some(code) => bail!(
-            "пикер '{}' завершился с кодом {code}; для выбора нужен терминал — если запускаешь не в нём, укажи хост явно: sshrek <host>",
+            "the picker '{}' exited with code {code}; picking needs a terminal — if you are not in one, name the host explicitly: sshrek <host>",
             cmd.program
         ),
         None => Ok(PickOutcome::Cancelled),
@@ -180,7 +180,7 @@ mod tests {
         assert!(joined.contains("--sort=frequent"), "{joined}");
         assert!(
             args.iter().any(|a| a == "--no-sort"),
-            "порядок из config сохраняется"
+            "the config order is preserved"
         );
     }
 
@@ -195,15 +195,18 @@ mod tests {
         assert!(build_command(Some("fzf 'unclosed"), None, "/bin/sshrek").is_err());
         assert!(
             build_command(Some("   "), None, "/bin/sshrek").is_ok(),
-            "пустое значение = дефолт"
+            "an empty value means the default"
         );
     }
 
     #[test]
     fn without_a_controlling_terminal_we_refuse_before_launching_the_picker() {
         let err = ensure_terminal(false).unwrap_err().to_string();
-        assert!(err.contains("терминал"), "{err}");
-        assert!(err.contains("sshrek <host>"), "подсказываем выход: {err}");
+        assert!(err.contains("terminal"), "{err}");
+        assert!(
+            err.contains("sshrek <host>"),
+            "we hint at the way out: {err}"
+        );
         assert!(ensure_terminal(true).is_ok());
     }
 
@@ -212,7 +215,7 @@ mod tests {
         let (_dir, cmd) = stub("cat > /dev/null; echo 'rpi5  2h ago  11×  pi@192.168.1.5'");
         match run(&cmd, &["rpi5  2h ago  11×  pi@192.168.1.5".to_string()]).unwrap() {
             PickOutcome::Selected(alias) => assert_eq!(alias, "rpi5"),
-            PickOutcome::Cancelled => panic!("ожидали выбор"),
+            PickOutcome::Cancelled => panic!("expected a selection"),
         }
     }
 
@@ -237,10 +240,10 @@ mod tests {
         let (_dir, broken) = stub("cat > /dev/null; exit 2");
         let err = run(&broken, &[]).unwrap_err().to_string();
         assert!(
-            err.contains("терминал"),
-            "сообщение подсказывает про TTY: {err}"
+            err.contains("terminal"),
+            "the message hints at the TTY requirement: {err}"
         );
-        assert!(err.contains("sshrek <host>"), "и предлагает выход: {err}");
+        assert!(err.contains("sshrek <host>"), "and offers a way out: {err}");
     }
 
     #[test]

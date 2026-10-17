@@ -3,7 +3,7 @@ name = "sshrek"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.82"
-description = "ssh с историей подключений и быстрым возвратом к последнему хосту"
+description = "ssh with connection history and a one-keystroke jump back to the last host"
 license = "MIT"
 
 [dependencies]

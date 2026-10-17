@@ -7,11 +7,11 @@ use crate::sort::SortKey;
 #[command(
     name = "sshrek",
     version,
-    about = "ssh с историей подключений и быстрым возвратом к последнему хосту",
+    about = "ssh with connection history and a one-keystroke jump back to the last host",
     args_conflicts_with_subcommands = true
 )]
 pub struct Cli {
-    /// Хост из ~/.ssh/config; `-` — последний, к которому подключался
+    /// Host from ~/.ssh/config; `-` means the last one you connected to
     #[arg(
         value_name = "HOST",
         allow_hyphen_values = true,
@@ -19,14 +19,14 @@ pub struct Cli {
     )]
     pub host: Option<String>,
 
-    /// Дополнительные аргументы для ssh после `--`
+    /// Extra arguments passed on to ssh after `--`
     #[arg(last = true, value_name = "SSH_ARGS")]
     pub extra: Vec<String>,
 
     #[command(flatten)]
     pub sorting: Sorting,
 
-    /// Подробная диагностика в stderr
+    /// Verbose diagnostics on stderr
     #[arg(long, global = true)]
     pub verbose: bool,
 
@@ -36,15 +36,15 @@ pub struct Cli {
 
 #[derive(clap::Args, Debug)]
 pub struct Sorting {
-    /// Порядок списка
+    /// Order of the list
     #[arg(long, value_enum, value_name = "KEY")]
     pub sort: Option<SortKey>,
 
-    /// То же, что --sort=recent
+    /// Same as --sort=recent
     #[arg(short = 'r', long, conflicts_with_all = ["frequent", "sort"])]
     pub recent: bool,
 
-    /// То же, что --sort=frequent
+    /// Same as --sort=frequent
     #[arg(short = 'f', long, conflicts_with_all = ["recent", "sort"])]
     pub frequent: bool,
 }
@@ -63,13 +63,13 @@ impl Sorting {
 
 #[derive(Subcommand, Debug)]
 pub enum Command {
-    /// Таблица хостов и истории подключений
+    /// Table of hosts and connection history
     Ls {
-        /// TSV без выравнивания и заголовка
+        /// TSV with no padding and no header
         #[arg(long)]
         porcelain: bool,
 
-        /// Только хосты из config, в формате строк пикера
+        /// Only hosts from the config, formatted as picker rows
         #[arg(long)]
         picker: bool,
 
@@ -77,13 +77,13 @@ pub enum Command {
         sorting: Sorting,
     },
 
-    /// Карточка одного хоста (используется в --preview пикера)
+    /// Card for a single host (used by the picker's --preview)
     Preview {
         #[arg(value_name = "HOST", value_hint = ValueHint::Hostname)]
         host: String,
     },
 
-    /// Скрипт автодополнения для шелла
+    /// Shell completion script
     Completions {
         #[arg(value_name = "SHELL")]
         shell: Shell,

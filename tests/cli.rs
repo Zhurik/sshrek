@@ -2,7 +2,7 @@ use assert_cmd::Command;
 use predicates::str::contains;
 
 fn sshrek() -> Command {
-    Command::cargo_bin("sshrek").expect("бинарник sshrek собран")
+    Command::cargo_bin("sshrek").expect("the sshrek binary is built")
 }
 
 #[test]
@@ -100,7 +100,7 @@ fn dash_without_history_explains_itself() {
         .arg("-")
         .assert()
         .code(1)
-        .stderr(contains("истории пока нет"));
+        .stderr(contains("no history yet"));
 }
 
 #[test]
@@ -132,7 +132,7 @@ fn cancelled_picker_exits_130_silently_without_touching_the_log() {
         .code(130)
         .stdout(predicates::str::is_empty());
 
-    assert_eq!(e.log(), "", "отмена не пишет историю");
+    assert_eq!(e.log(), "", "a cancelled pick writes no history");
 }
 
 #[test]
@@ -184,8 +184,12 @@ fn ls_porcelain_is_tab_separated_and_sortable() {
     let first = text.lines().next().unwrap();
 
     assert!(first.contains('\t'), "{first}");
-    assert_eq!(first.split('\t').next(), Some("rpi5"), "свежий хост первым");
-    assert!(!text.contains("HOST"), "в porcelain нет заголовка");
+    assert_eq!(
+        first.split('\t').next(),
+        Some("rpi5"),
+        "the freshest host comes first"
+    );
+    assert!(!text.contains("HOST"), "porcelain carries no header");
 }
 
 #[test]
@@ -201,7 +205,7 @@ fn picker_format_is_aligned_and_starts_with_the_alias() {
 
     assert!(
         !first.contains('\t'),
-        "строки пикера выровнены пробелами: {first}"
+        "picker rows are padded with spaces: {first}"
     );
     assert_eq!(first.split_whitespace().next(), Some("usa"), "{first}");
 }
@@ -239,14 +243,14 @@ fn recent_and_frequent_flags_conflict() {
 fn broken_state_dir_warns_but_still_connects() {
     let e = env();
     let busy = e.dir.path().join("busy");
-    std::fs::write(&busy, "я файл, а не каталог").unwrap();
+    std::fs::write(&busy, "i am a file, not a directory").unwrap();
 
     e.cmd()
         .env("SSHREK_STATE_DIR", &busy)
         .arg("potato")
         .assert()
         .success()
-        .stderr(contains("история не записана"));
+        .stderr(contains("history not written"));
 }
 
 #[test]
@@ -269,11 +273,14 @@ fn host_completion_offers_hosts_not_files() {
         .lines()
         .filter(|l| l.contains(":host") && !l.contains("SSH_ARGS"))
         .collect();
-    assert!(!host_lines.is_empty(), "аргумент host есть в скрипте");
+    assert!(
+        !host_lines.is_empty(),
+        "the host argument is present in the script"
+    );
     for line in host_lines {
         assert!(
             !line.contains("_default") && !line.contains("_files"),
-            "host не должен дополняться именами файлов: {line}"
+            "host must not be completed with file names: {line}"
         );
     }
 }
@@ -283,20 +290,20 @@ fn unreadable_log_is_reported_not_mistaken_for_an_empty_history() {
     let e = env();
     let state = e.dir.path().join("state");
     std::fs::create_dir_all(&state).unwrap();
-    // Каталог вместо файла: лог существует, но прочитать его нельзя.
+    // A directory in place of the file: the log exists but cannot be read.
     std::fs::create_dir(state.join("sessions.jsonl")).unwrap();
 
     e.cmd()
         .arg("-")
         .assert()
         .code(1)
-        .stderr(contains("история не прочитана"));
+        .stderr(contains("could not read the history"));
 }
 
 #[test]
 fn piping_a_long_listing_into_head_does_not_panic() {
     let e = env();
-    // Вывод заведомо больше буфера трубы, чтобы head закрыл её на полуслове.
+    // The output is deliberately larger than the pipe buffer so head closes it mid-sentence.
     let many: String = (0..5000).map(|i| format!("Host h{i}\n")).collect();
     let big = e.dir.path().join("big_config");
     std::fs::write(&big, many).unwrap();
@@ -315,7 +322,7 @@ fn piping_a_long_listing_into_head_does_not_panic() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
         !stderr.contains("panicked"),
-        "паника вместо тихого выхода: {stderr}"
+        "a panic instead of a quiet exit: {stderr}"
     );
     assert!(!stderr.contains("Broken pipe"), "{stderr}");
 }

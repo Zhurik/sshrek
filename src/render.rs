@@ -5,8 +5,8 @@ use chrono::{DateTime, TimeDelta, Utc};
 use crate::config::HostEntry;
 use crate::history::HostStats;
 
-/// Кэп ширины колонки: длинное значение расширит свою строку,
-/// но не растянет таблицу целиком.
+/// Column width cap: a long value stretches its own row
+/// without stretching the whole table.
 const MAX_ALIAS_WIDTH: usize = 24;
 const MAX_LAST_WIDTH: usize = 16;
 const MAX_COUNT_WIDTH: usize = 8;
@@ -147,7 +147,7 @@ pub fn picker_rows(
         .collect()
 }
 
-/// Тот же набор данных, что в таблице, но TSV без выравнивания и заголовка.
+/// The same data set as the table, but TSV with no padding and no header.
 pub fn porcelain_rows(
     hosts: &[HostEntry],
     stats: &HashMap<String, HostStats>,
@@ -167,8 +167,8 @@ pub fn porcelain_rows(
         .collect()
 }
 
-/// Хост, живущий только в истории: подключиться к нему нельзя, но знать о нём
-/// полезно — и человеку в таблице, и скрипту в porcelain.
+/// A host that lives only in the history: it cannot be connected to, but knowing
+/// it exists is useful — both to a human in the table and to a script in porcelain.
 fn orphan_cells(s: &HostStats, now: DateTime<Utc>) -> Cells {
     Cells {
         alias: s.host.clone(),
@@ -177,7 +177,7 @@ fn orphan_cells(s: &HostStats, now: DateTime<Utc>) -> Cells {
             .map_or_else(|| "never".to_string(), |t| fmt_relative(t, now)),
         count: format!("{}×", s.connections),
         total: fmt_duration(s.total_duration),
-        target: "(нет в config)".to_string(),
+        target: "(not in config)".to_string(),
     }
 }
 
@@ -230,7 +230,7 @@ pub fn preview(
     stats: Option<&HostStats>,
     now: DateTime<Utc>,
 ) -> String {
-    let target = entry.map_or_else(|| "(нет в config)".to_string(), target_of);
+    let target = entry.map_or_else(|| "(not in config)".to_string(), target_of);
     let last = stats.and_then(|s| s.last_connected).map_or_else(
         || "never".to_string(),
         |t| {
@@ -357,13 +357,13 @@ mod tests {
         assert_eq!(
             second_column_start(&rows[0]),
             second_column_start(&rows[1]),
-            "колонки выровнены:\n{}\n{}",
+            "the columns are aligned:\n{}\n{}",
             rows[0],
             rows[1]
         );
     }
 
-    // Review Focus 5 (длинные значения не должны ломать первое поле)
+    // Review Focus 5 (long values must not break the first field)
     #[test]
     fn overlong_alias_still_leaves_the_alias_as_field_one() {
         let hosts = vec![host(&"x".repeat(60), 0), host("short", 1)];
@@ -392,7 +392,7 @@ mod tests {
         assert_eq!(
             rows.len(),
             2,
-            "хост из истории, выпавший из config, тоже в выводе"
+            "a history host dropped from the config shows up in the output too"
         );
         let fields: Vec<&str> = rows[0].split('\t').collect();
         assert_eq!(
@@ -401,9 +401,9 @@ mod tests {
             "HOST, LAST, COUNT, TOTAL, TARGET: {:?}",
             fields
         );
-        assert_eq!(fields[3], "10m", "длительность доступна машинно");
+        assert_eq!(fields[3], "10m", "the duration is machine-readable");
         assert!(rows[1].starts_with("retired\t"), "{}", rows[1]);
-        assert!(rows[1].contains("нет в config"), "{}", rows[1]);
+        assert!(rows[1].contains("not in config"), "{}", rows[1]);
     }
 
     #[test]
@@ -416,7 +416,7 @@ mod tests {
         assert!(out.starts_with("HOST"), "{out}");
         assert!(out.contains("potato"), "{out}");
         assert!(out.contains("retired"), "{out}");
-        assert!(out.contains("нет в config"), "{out}");
+        assert!(out.contains("not in config"), "{out}");
     }
 
     #[test]

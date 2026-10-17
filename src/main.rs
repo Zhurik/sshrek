@@ -1,4 +1,4 @@
-//! Тонкая обёртка над библиотекой: разбор аргументов и маршрутизация команд.
+//! A thin shell around the library: argument parsing and command routing.
 
 use std::collections::HashMap;
 
@@ -18,11 +18,11 @@ fn main() {
     std::process::exit(run(args));
 }
 
-/// Rust глушит SIGPIPE при старте, из-за чего `sshrek ls | head` роняет
-/// программу паникой вместо тихого завершения. Возвращаем поведение,
-/// которого ждут от инструмента в конвейере — как у `cat` или `ls`.
+/// Rust mutes SIGPIPE on startup, which makes `sshrek ls | head` die with a
+/// panic instead of exiting quietly. Restore the behaviour expected of a tool
+/// in a pipeline — the same one `cat` or `ls` has.
 fn restore_default_sigpipe() {
-    // SAFETY: единственный вызов signal(2) до создания потоков.
+    // SAFETY: the only signal(2) call, made before any thread is spawned.
     unsafe {
         libc::signal(libc::SIGPIPE, libc::SIG_DFL);
     }
@@ -32,26 +32,26 @@ struct Context {
     hosts: Vec<HostEntry>,
     stats: HashMap<String, HostStats>,
     store: Store,
-    /// Последний start-эвент: считается здесь же, чтобы не читать лог второй раз.
+    /// The latest start event: computed here so the log is not read twice.
     last_host: Option<String>,
 }
 
 fn load(verbose: bool) -> Context {
     let (hosts, config_error) = config::parse_file(&paths::ssh_config());
     if let Some(e) = config_error {
-        eprintln!("sshrek: конфиг не прочитан: {e}");
+        eprintln!("sshrek: could not read the config: {e}");
     }
     let store = Store::new(paths::sessions_log());
     let read = store.read_all();
-    // Ошибка чтения печатается всегда: иначе целая история, ставшая
-    // недоступной, выглядит как её отсутствие. Под --verbose прячутся
-    // только счётчики пропущенных строк.
+    // A read error is always printed: otherwise a whole history that became
+    // unreadable would look just like a missing one. Only the counters of
+    // skipped lines hide behind --verbose.
     if let Some(e) = &read.error {
-        eprintln!("sshrek: история не прочитана: {e}");
+        eprintln!("sshrek: could not read the history: {e}");
     }
     if verbose && (read.malformed > 0 || read.unknown_version > 0) {
         eprintln!(
-            "sshrek: в логе пропущено строк: битых {}, с другой версией схемы {}",
+            "sshrek: lines skipped in the log: {} malformed, {} with another schema version",
             read.malformed, read.unknown_version
         );
     }
@@ -79,8 +79,8 @@ fn sorted_hosts(ctx: &Context, key: SortKey) -> Vec<HostEntry> {
     hosts
 }
 
-/// Хосты, которые есть в истории, но исчезли из config: подключиться к ним
-/// нельзя, но в `ls` о них полезно знать.
+/// Hosts present in the history but gone from the config: they cannot be
+/// connected to, yet `ls` is a good place to learn they exist.
 fn orphans<'a>(ctx: &'a Context, hosts: &[HostEntry]) -> Vec<&'a HostStats> {
     let known: std::collections::HashSet<&str> = hosts.iter().map(|h| h.alias.as_str()).collect();
     let mut out: Vec<&HostStats> = ctx
@@ -121,8 +121,8 @@ fn run(args: Cli) -> i32 {
             let ctx = load(args.verbose);
             let hosts = sorted_hosts(&ctx, sorting.key());
             let now = Utc::now();
-            // Формат пикера — единственный, где хостов из истории быть не должно:
-            // подключиться к тому, чего нет в config, всё равно нельзя.
+            // The picker format is the only one that must not carry history-only
+            // hosts: there is no way to connect to what the config does not list.
             let gone = if *picker_format {
                 Vec::new()
             } else {
@@ -153,7 +153,7 @@ fn connect_flow(args: &Cli) -> i32 {
         Some("-") => match ctx.last_host.clone() {
             Some(h) => h,
             None => {
-                eprintln!("sshrek: истории пока нет, запусти sshrek без аргументов и выбери хост");
+                eprintln!("sshrek: no history yet — run sshrek with no arguments and pick a host");
                 return 1;
             }
         },
@@ -162,7 +162,7 @@ fn connect_flow(args: &Cli) -> i32 {
             let hosts = sorted_hosts(&ctx, args.sorting.key());
             if hosts.is_empty() {
                 eprintln!(
-                    "sshrek: в {} нет ни одного хоста",
+                    "sshrek: not a single host in {}",
                     paths::ssh_config().display()
                 );
                 return 1;
@@ -173,9 +173,9 @@ fn connect_flow(args: &Cli) -> i32 {
             let self_exe = std::env::current_exe()
                 .map(|p| p.to_string_lossy().into_owned())
                 .unwrap_or_else(|_| "sshrek".to_string());
-            // Проверяем терминал только для пикера по умолчанию: fzf без TTY
-            // не падает, а виснет навсегда. Свой пикер пользователь задал сам —
-            // его требования нам неизвестны, и мешать ему мы не вправе.
+            // Check for a terminal only for the default picker: without a TTY fzf
+            // does not fail, it hangs forever. A custom picker was chosen by the
+            // user — we do not know its requirements and have no right to interfere.
             let terminal_ok = picker_env.is_some() || picker::has_controlling_terminal();
             if let Err(e) = picker::ensure_terminal(terminal_ok) {
                 eprintln!("sshrek: {e}");
@@ -193,7 +193,7 @@ fn connect_flow(args: &Cli) -> i32 {
                 }
             };
             if args.verbose {
-                eprintln!("sshrek: пикер {} {:?}", cmd.program, cmd.args);
+                eprintln!("sshrek: picker {} {:?}", cmd.program, cmd.args);
             }
             match picker::run(&cmd, &rows) {
                 Ok(PickOutcome::Selected(alias)) => alias,

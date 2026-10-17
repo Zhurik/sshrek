@@ -23,26 +23,26 @@ impl Store {
         Store { path }
     }
 
-    /// Append-only: одна запись — одна строка, файл никогда не перезаписывается.
+    /// Append-only: one record per line, the file is never rewritten.
     pub fn append(&self, rec: &Record) -> Result<()> {
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent)
-                .with_context(|| format!("не удалось создать {}", parent.display()))?;
+                .with_context(|| format!("could not create {}", parent.display()))?;
         }
-        let mut line = serde_json::to_string(rec).context("сериализация события")?;
-        // Перевод строки уходит тем же write: O_APPEND атомарен для одного вызова,
-        // но не для пары — иначе параллельные запуски склеивают строки.
+        let mut line = serde_json::to_string(rec).context("serializing the event")?;
+        // The newline goes out in the same write: O_APPEND is atomic for a single
+        // call but not for a pair — otherwise concurrent runs would glue lines together.
         line.push('\n');
         let mut file = OpenOptions::new()
             .create(true)
             .append(true)
             .open(&self.path)
-            .with_context(|| format!("не удалось открыть {}", self.path.display()))?;
+            .with_context(|| format!("could not open {}", self.path.display()))?;
         file.write_all(line.as_bytes())
-            .with_context(|| format!("не удалось записать в {}", self.path.display()))
+            .with_context(|| format!("could not write to {}", self.path.display()))
     }
 
-    /// Никогда не возвращает Err: по спеке история не причина падения.
+    /// Never returns Err: per the spec, the history is no reason to fail.
     pub fn read_all(&self) -> ReadResult {
         let mut out = ReadResult::default();
         let text = match std::fs::read_to_string(&self.path) {
@@ -91,10 +91,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&log).unwrap();
         assert_eq!(text.lines().count(), 2);
-        assert!(
-            text.ends_with('\n'),
-            "каждая запись завершается переводом строки"
-        );
+        assert!(text.ends_with('\n'), "every record ends with a newline");
     }
 
     #[test]
@@ -104,7 +101,7 @@ mod tests {
         let good = serde_json::to_string(&rec("a", "potato", 1)).unwrap();
         std::fs::write(
             &log,
-            format!("{good}\nне json\n{{\"v\":42,\"event\":\"start\"}}\n\n"),
+            format!("{good}\nnot json\n{{\"v\":42,\"event\":\"start\"}}\n\n"),
         )
         .unwrap();
 
@@ -119,7 +116,10 @@ mod tests {
     fn missing_log_reads_as_empty_without_error() {
         let out = Store::new("/nope/not/here/sessions.jsonl".into()).read_all();
         assert!(out.records.is_empty());
-        assert!(out.error.is_none(), "отсутствие истории — не ошибка");
+        assert!(
+            out.error.is_none(),
+            "a missing history file is not an error"
+        );
     }
 
     #[test]
@@ -127,9 +127,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let log = dir.path().join("sessions.jsonl");
 
-        // O_APPEND делает атомарным каждый write, но не пару write'ов:
-        // запись строки и перевода строки по отдельности позволяет соседнему
-        // процессу вклиниться между ними.
+        // O_APPEND makes each single write atomic, but not a pair of them:
+        // writing the line and the newline separately would let a neighbouring
+        // process wedge itself in between.
         std::thread::scope(|scope| {
             for t in 0..8 {
                 let log = log.clone();
@@ -145,8 +145,8 @@ mod tests {
         });
 
         let out = Store::new(log).read_all();
-        assert_eq!(out.malformed, 0, "битых строк быть не должно");
-        assert_eq!(out.records.len(), 800, "ни одна запись не потеряна");
+        assert_eq!(out.malformed, 0, "there must be no malformed lines");
+        assert_eq!(out.records.len(), 800, "not a single record is lost");
     }
 
     // Review Focus 5
@@ -154,13 +154,13 @@ mod tests {
     fn append_fails_loudly_when_state_dir_is_a_file() {
         let dir = tempfile::tempdir().unwrap();
         let busy = dir.path().join("state");
-        std::fs::write(&busy, "я файл, а не каталог").unwrap();
+        std::fs::write(&busy, "i am a file, not a directory").unwrap();
         let store = Store::new(busy.join("sessions.jsonl"));
 
         let err = store.append(&rec("a", "potato", 1)).unwrap_err();
         assert!(
             err.to_string().contains("sessions.jsonl") || err.to_string().contains("state"),
-            "ошибка называет путь: {err}"
+            "the error names the path: {err}"
         );
     }
 
@@ -174,7 +174,7 @@ mod tests {
         assert!(out.records.is_empty());
         assert!(
             out.error.is_some(),
-            "каталог вместо файла — это ошибка чтения"
+            "a directory in place of the file is a read error"
         );
     }
 }
