@@ -85,3 +85,20 @@ jobs:
             SHA256SUMS
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
+
+  bump-tap:
+    needs: release
+    # Prereleases are not published to the tap.
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask the tap to re-render the formula
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::TAP_DISPATCH_TOKEN is not set; the Homebrew formula was not bumped"
+            exit 0
+          fi
+          gh workflow run bump.yml --repo Zhurik/homebrew-tap \
+            --field repo="$GITHUB_REPOSITORY" --field tag="$GITHUB_REF_NAME"
+        env:
+          GH_TOKEN: ${{ secrets.TAP_DISPATCH_TOKEN }}
