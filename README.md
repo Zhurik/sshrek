@@ -6,6 +6,13 @@ one, keep a history of your connections.
 ## Installation
 
 ```sh
+brew install Zhurik/tap/sshrek
+```
+
+Homebrew covers macOS on Apple silicon and Intel, and Linux on x86_64 and arm64.
+Otherwise build it yourself:
+
+```sh
 cargo install --path .
 ```
 
