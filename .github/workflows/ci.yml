@@ -37,4 +37,8 @@ jobs:
           key: x86_64-apple-darwin
       - run: cargo build --release --locked --target x86_64-apple-darwin
       - run: cargo test --no-run --locked --target x86_64-apple-darwin
-      - run: lipo -archs target/x86_64-apple-darwin/release/sshrek | grep -qw x86_64
+      - name: The binary must really be x86_64
+        run: |
+          binary=target/x86_64-apple-darwin/release/sshrek
+          file "$binary"
+          lipo -archs "$binary" | grep -qw x86_64
