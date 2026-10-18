@@ -34,8 +34,11 @@ jobs:
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-musl
             musl: true
-          # - os: macos-13
-          #   target: x86_64-apple-darwin
+          # Intel macOS is cross-compiled: GitHub retired the x86_64 image
+          # (macos-13) in December 2025, and its replacement, macos-15-intel,
+          # is promised only until August 2027.
+          - os: macos-latest
+            target: x86_64-apple-darwin
           - os: macos-latest
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
@@ -51,6 +54,14 @@ jobs:
         if: matrix.musl
         run: sudo apt-get update && sudo apt-get install -y musl-tools
       - run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: The binary must match the target it is named after
+        run: |
+          binary="target/${{ matrix.target }}/release/sshrek"
+          file "$binary"
+          case "${{ matrix.target }}" in
+            x86_64-apple-darwin) lipo -archs "$binary" | grep -qw x86_64 ;;
+            aarch64-apple-darwin) lipo -archs "$binary" | grep -qw arm64 ;;
+          esac
       - name: Pack the archive
         run: |
           name="sshrek-${GITHUB_REF_NAME}-${{ matrix.target }}"

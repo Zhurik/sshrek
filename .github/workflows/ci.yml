@@ -21,3 +21,20 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --all --locked
+
+  # The Intel macOS archive in the release is cross-compiled, so make sure it
+  # still links here rather than finding out at tag time. The binary cannot be
+  # run on an arm64 runner, hence building the tests instead of running them.
+  cross-macos-intel:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: x86_64-apple-darwin
+      - run: cargo build --release --locked --target x86_64-apple-darwin
+      - run: cargo test --no-run --locked --target x86_64-apple-darwin
+      - run: lipo -archs target/x86_64-apple-darwin/release/sshrek | grep -qw x86_64
