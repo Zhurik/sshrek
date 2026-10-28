@@ -1,3 +1,6 @@
+//! The command line as clap sees it. Parsing only — what is done with the
+//! result lives in `main.rs`.
+
 use clap::{Parser, Subcommand, ValueHint};
 use clap_complete::Shell;
 

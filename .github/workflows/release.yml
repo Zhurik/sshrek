@@ -68,6 +68,7 @@ jobs:
           mkdir -p "dist/$name"
           cp "target/${{ matrix.target }}/release/sshrek" "dist/$name/"
           cp README.md LICENSE "dist/$name/"
+          cp -R docs "dist/$name/"
           tar -C dist -czf "dist/$name.tar.gz" "$name"
           cd dist && shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256"
       - uses: actions/upload-artifact@v4

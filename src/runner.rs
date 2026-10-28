@@ -1,3 +1,6 @@
+//! Running `ssh`: spawning it, waiting for it, and bracketing the session with
+//! the two history events that record it.
+
 use std::os::unix::process::CommandExt;
 use std::process::Command;
 use std::time::SystemTime;

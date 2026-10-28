@@ -1,3 +1,7 @@
+//! One line of the log: the `start` and `end` events, the schema version that
+//! lets a future one be skipped rather than mistaken for corruption, and
+//! parsing a line back.
+
 use std::time::SystemTime;
 
 use chrono::{DateTime, Utc};

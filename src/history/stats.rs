@@ -1,3 +1,6 @@
+//! Folding the log into per-host totals: how many sessions, how long in all,
+//! and when you were last there.
+
 use std::collections::HashMap;
 
 use chrono::{DateTime, TimeDelta, Utc};

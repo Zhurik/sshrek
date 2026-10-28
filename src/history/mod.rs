@@ -1,3 +1,6 @@
+//! The connection history: an append-only log of session events and the
+//! per-host statistics derived from it.
+
 pub mod event;
 pub mod stats;
 pub mod store;

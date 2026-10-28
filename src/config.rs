@@ -1,3 +1,8 @@
+//! Reading the ssh config: which aliases to offer and where each one points.
+//!
+//! Only the subset needed to build that list is interpreted, and nothing is
+//! ever written back — `ssh` stays the authority on what a config means.
+
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
