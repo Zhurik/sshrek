@@ -21,6 +21,21 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --all --locked
+      - run: RUSTDOCFLAGS=-Dwarnings cargo doc --no-deps --locked
+
+  # The same hooks a contributor gets from `pre-commit install`, for the commits
+  # that arrive without them. The cargo ones are skipped: the job above already
+  # runs those, on two platforms.
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - uses: pre-commit/action@v3.0.1
+        env:
+          SKIP: cargo-fmt,cargo-clippy
 
   # The Intel macOS archive in the release is cross-compiled, so make sure it
   # still links here rather than finding out at tag time. The binary cannot be
