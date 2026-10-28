@@ -1,3 +1,6 @@
+//! The `alias` subcommand: the shell snippet that binds the tool to another
+//! command name, with the completion for that name attached.
+
 use anyhow::{bail, Result};
 use clap_complete::Shell;
 

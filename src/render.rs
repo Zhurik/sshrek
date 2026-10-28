@@ -1,3 +1,7 @@
+//! Hosts and history turned into text: the `ls` table, the rows the picker
+//! displays, the preview card, and the human-sized times and durations inside
+//! them.
+
 use std::collections::HashMap;
 
 use chrono::{DateTime, TimeDelta, Utc};

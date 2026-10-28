@@ -1,3 +1,6 @@
+//! Driving the external picker, `fzf` unless told otherwise: the command line
+//! it is given, the rows it reads on stdin, the host it prints back.
+
 use std::io::Write;
 use std::process::{Command, Stdio};
 

@@ -1,3 +1,9 @@
+//! Where the config and the history live.
+//!
+//! Each location comes in two halves: a `resolve_*` function holding the rules
+//! and a wrapper that feeds it the environment. The rules are then testable
+//! without touching the environment of the running process.
+
 use std::path::{Path, PathBuf};
 
 pub const LOG_FILE: &str = "sessions.jsonl";

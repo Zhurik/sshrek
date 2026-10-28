@@ -1,3 +1,6 @@
+//! The order of the host list: as declared in the config, most recent first,
+//! or most frequent first.
+
 use std::cmp::Ordering;
 use std::collections::HashMap;
 

@@ -1,3 +1,6 @@
+//! The log file itself: appending one record, and reading them all back with a
+//! count of whatever had to be skipped.
+
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
