@@ -67,6 +67,23 @@ Types: `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`,
 `revert`, `style`, `test`. A `!` before the colon marks a breaking change.
 Merge, revert and `--fixup`/`--squash` subjects are left alone.
 
+The type is not decoration: `feat` and `fix` are what [the next
+release](docs/releasing.md) is computed from, and the subject is what ends up
+in the changelog.
+
+## Dependencies
+
+[Renovate](https://docs.renovatebot.com) keeps crates, GitHub Actions and the
+pre-commit hooks up to date, configured in `renovate.json5`. Patch and minor
+updates, and the weekly `Cargo.lock` refresh, are merged by Renovate itself
+once every CI check on its branch is green and the release is at least three
+days old. Majors, and minor bumps of `0.x` crates, wait for a review. The
+Dependency Dashboard issue lists what is pending.
+
+`rust-version` in `Cargo.toml` is checked by CI with that exact toolchain, and
+`.cargo/config.toml` makes Cargo resolve dependencies that still build on it.
+Raising it is a deliberate change, not a side effect of an update.
+
 ## Shape of the code
 
 The logic lives in the library and `main.rs` only wires commands together, so

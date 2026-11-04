@@ -1,8 +1,18 @@
 name: release
 
 on:
+  # Pushed by hand, see docs/releasing.md.
   push:
     tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+  # Called by release-please.yml once it has tagged and published a release.
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
 
 permissions:
   contents: write
@@ -12,9 +22,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
       - name: Tag must match the version in Cargo.toml
         run: |
-          tag="${GITHUB_REF_NAME#v}"
+          tag="${TAG#v}"
           crate="$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"(.*)".*/\1/')"
           echo "tag: $tag, Cargo.toml: $crate"
           if [ "$tag" != "$crate" ]; then
@@ -44,6 +56,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -64,7 +78,7 @@ jobs:
           esac
       - name: Pack the archive
         run: |
-          name="sshrek-${GITHUB_REF_NAME}-${{ matrix.target }}"
+          name="sshrek-${TAG}-${{ matrix.target }}"
           mkdir -p "dist/$name"
           cp "target/${{ matrix.target }}/release/sshrek" "dist/$name/"
           cp README.md LICENSE "dist/$name/"
@@ -95,13 +109,16 @@ jobs:
           files: |
             dist/*.tar.gz
             SHA256SUMS
-          generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          tag_name: ${{ env.TAG }}
+          # release-please has already written the notes from the changelog;
+          # generating them here would replace that text.
+          generate_release_notes: ${{ inputs.tag == '' }}
+          prerelease: ${{ contains(env.TAG, '-') }}
 
   bump-tap:
     needs: release
     # Prereleases are not published to the tap.
-    if: ${{ !contains(github.ref_name, '-') }}
+    if: ${{ !contains(inputs.tag || github.ref_name, '-') }}
     runs-on: ubuntu-latest
     steps:
       - name: Ask the tap to re-render the formula
@@ -111,6 +128,6 @@ jobs:
             exit 0
           fi
           gh workflow run bump.yml --repo Zhurik/homebrew-tap \
-            --field repo="$GITHUB_REPOSITORY" --field tag="$GITHUB_REF_NAME"
+            --field repo="$GITHUB_REPOSITORY" --field tag="$TAG"
         env:
           GH_TOKEN: ${{ secrets.TAP_DISPATCH_TOKEN }}

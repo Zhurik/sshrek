@@ -92,7 +92,7 @@ Inside the picker: `ctrl-o` — config order, `ctrl-r` — most recent first,
 | [Configuration](docs/configuration.md) | environment variables, where the history lives |
 | [Running it under another name](docs/alias.md) | turning it into `cssh`, or into a one-letter `s` |
 | [Contributing](CONTRIBUTING.md) | the development loop, hooks, commit messages |
-| [Releasing](docs/releasing.md) | how a tag becomes a release |
+| [Releasing](docs/releasing.md) | how commits become a release, and how it reaches Homebrew |
 
 ## License
 
