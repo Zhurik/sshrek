@@ -1,0 +1,33 @@
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: ['config:recommended'],
+  // Commit subjects go through scripts/check-commit-msg.sh locally and into
+  // the release-please changelog later, so they have to be conventional.
+  semanticCommits: 'enabled',
+  // Renovate merges by itself once every check on the branch is green. The
+  // GitHub auto-merge button would not wait: main has no required checks.
+  platformAutomerge: false,
+  // A release that turns out to be malicious or broken is usually yanked
+  // within days; nothing is merged before that window has passed.
+  minimumReleaseAge: '3 days',
+  'pre-commit': {
+    enabled: true,
+  },
+  lockFileMaintenance: {
+    enabled: true,
+    automerge: true,
+  },
+  packageRules: [
+    {
+      matchUpdateTypes: ['minor', 'patch', 'pin', 'digest'],
+      automerge: true,
+    },
+    // Below 1.0 a minor bump is the breaking one, so it waits for a human,
+    // like every major does.
+    {
+      matchCurrentVersion: '/^v?0\\./',
+      matchUpdateTypes: ['minor'],
+      automerge: false,
+    },
+  ],
+}
