@@ -1,0 +1,5 @@
+# Resolve to the newest dependency versions that still build on the
+# rust-version in Cargo.toml, so a lockfile refresh (Renovate's included)
+# cannot raise the MSRV behind anyone's back.
+[resolver]
+incompatible-rust-versions = "fallback"
