@@ -18,16 +18,11 @@
     automerge: true,
   },
   packageRules: [
+    // Minors of 0.x crates included: a breaking one fails to compile or fails
+    // the tests, and then the PR simply stays open.
     {
       matchUpdateTypes: ['minor', 'patch', 'pin', 'digest'],
       automerge: true,
-    },
-    // Below 1.0 a minor bump is the breaking one, so it waits for a human,
-    // like every major does.
-    {
-      matchCurrentVersion: '/^v?0\\./',
-      matchUpdateTypes: ['minor'],
-      automerge: false,
     },
   ],
 }

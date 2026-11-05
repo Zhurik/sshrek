@@ -77,7 +77,7 @@ in the changelog.
 pre-commit hooks up to date, configured in `renovate.json5`. Patch and minor
 updates, and the weekly `Cargo.lock` refresh, are merged by Renovate itself
 once every CI check on its branch is green and the release is at least three
-days old. Majors, and minor bumps of `0.x` crates, wait for a review. The
+days old, minor bumps of `0.x` crates included. Majors wait for a review. The
 Dependency Dashboard issue lists what is pending.
 
 `rust-version` in `Cargo.toml` is checked by CI with that exact toolchain, and
