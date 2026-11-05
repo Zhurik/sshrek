@@ -19,14 +19,27 @@ follows from the commits since the last tag:
 | only `chore:`, `docs:`, `ci:`, … | no release PR | no release PR |
 
 Merging that PR is the release. release-please tags the merge commit, publishes
-a GitHub release with the changelog section as its notes, and then calls
+a GitHub release with the changelog section as its notes. The tag starts
 `release.yml`, which builds four targets — Linux x86_64 and aarch64 against
 musl, macOS aarch64 and x86_64 — and attaches a `.tar.gz` plus a `.sha256` for
 each, and a `SHA256SUMS` file.
 
-The release PR is opened with the workflow token, and GitHub runs no checks on
-pull requests opened that way. That is fine: it only touches the version and
-the changelog, and everything it releases has already passed CI on `main`.
+## The token
+
+release-please runs with `RELEASE_PLEASE_TOKEN`, a fine-grained token with
+access to `Zhurik/sshrek` only and **Contents**, **Pull requests** and
+**Workflows**, all read and write. The workflow's own `GITHUB_TOKEN` would not
+do:
+
+- a tag pushed with it starts no workflow, so `release.yml` would never run;
+- pull requests opened with it get no CI;
+- it cannot tag a commit that is no longer the head of `main` when workflow
+  files changed in between — and a Renovate automerge landing right after the
+  release PR is exactly that. The run fails with "Resource not accessible by
+  integration".
+
+When the token expires, the release-please run on `main` turns red. Put a new
+one in place with `gh secret set RELEASE_PLEASE_TOKEN` and re-run it.
 
 `sshrek --version` prints the `version` from `Cargo.toml`, so the binaries of a
 release always report the release they belong to.

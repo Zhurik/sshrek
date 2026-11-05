@@ -2,33 +2,25 @@ name: release-please
 
 # Keeps a release PR open that bumps Cargo.toml and CHANGELOG.md from the
 # conventional commits landed since the last tag. Merging that PR is the
-# release: release-please tags it and publishes the GitHub release.
+# release: release-please tags it and publishes the GitHub release, and the
+# tag starts release.yml.
 on:
   push:
     branches: [main]
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   release-please:
     runs-on: ubuntu-latest
-    outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
+      # A personal token instead of GITHUB_TOKEN, for three reasons: a tag
+      # pushed with GITHUB_TOKEN starts no workflow, so release.yml would never
+      # run; pull requests it opens get no CI either; and it cannot tag a
+      # commit that is no longer the head of main when workflow files changed
+      # in between, which is all it takes for a Renovate automerge to land
+      # right after the release PR.
       - uses: googleapis/release-please-action@v5
-        id: release
-
-  # A tag pushed with GITHUB_TOKEN triggers no workflows, so the build is
-  # called from here instead of waiting for release.yml to notice the tag.
-  publish:
-    needs: release-please
-    if: ${{ needs.release-please.outputs.release_created == 'true' }}
-    uses: ./.github/workflows/release.yml
-    with:
-      tag: ${{ needs.release-please.outputs.tag_name }}
-    secrets: inherit
-    permissions:
-      contents: write
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}

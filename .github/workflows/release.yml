@@ -1,18 +1,13 @@
 name: release
 
+# The tag comes from release-please, or from a push by hand for a pre-release;
+# see docs/releasing.md.
 on:
-  # Pushed by hand, see docs/releasing.md.
   push:
     tags: ['v[0-9]+.[0-9]+.[0-9]+*']
-  # Called by release-please.yml once it has tagged and published a release.
-  workflow_call:
-    inputs:
-      tag:
-        type: string
-        required: true
 
 env:
-  TAG: ${{ inputs.tag || github.ref_name }}
+  TAG: ${{ github.ref_name }}
 
 permissions:
   contents: write
@@ -104,21 +99,31 @@ jobs:
         run: |
           cat dist/*.sha256 > SHA256SUMS
           cat SHA256SUMS
+      # release-please publishes the release with the changelog as its notes
+      # before this runs; generated notes would replace that text.
+      - name: Does the release exist already
+        id: existing
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
       - uses: softprops/action-gh-release@v3
         with:
           files: |
             dist/*.tar.gz
             SHA256SUMS
           tag_name: ${{ env.TAG }}
-          # release-please has already written the notes from the changelog;
-          # generating them here would replace that text.
-          generate_release_notes: ${{ inputs.tag == '' }}
+          generate_release_notes: ${{ steps.existing.outputs.found != 'true' }}
           prerelease: ${{ contains(env.TAG, '-') }}
 
   bump-tap:
     needs: release
     # Prereleases are not published to the tap.
-    if: ${{ !contains(inputs.tag || github.ref_name, '-') }}
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     steps:
       - name: Ask the tap to re-render the formula
